@@ -93,3 +93,7 @@ const UserSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+/* ------------------------------------------------------- */
+// Exports:
+module.exports = mongoose.model("User", UserSchema);
