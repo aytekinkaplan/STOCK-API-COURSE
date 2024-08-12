@@ -57,7 +57,7 @@ const UserSchema = new mongoose.Schema(
       type: String,
       trim: true,
       required: true,
-      uniqu: true,
+      unique: true,
       index: true,
     },
 
@@ -93,6 +93,45 @@ const UserSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+/* ------------------------------------------------------- */
+// https://mongoosejs.com/docs/middleware.html
+
+const passwordEncrypt = require("../helpers/passwordEncrypt");
+
+UserSchema.pre("save", function (next) {
+  // console.log('pre-save çalıştı.')
+  // console.log(this)
+
+  const data = this;
+
+  // Email Control:
+  const isEmailValidated = data.email
+    ? /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(data.email)
+    : true;
+
+  if (isEmailValidated) {
+    // console.log('Email is OK')
+
+    const isPasswordValidated = data.password
+      ? /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(
+          data.password
+        )
+      : true;
+
+    if (isPasswordValidated) {
+      this.password = passwordEncrypt(data.password);
+
+      next();
+    } else {
+      // throw new Error('Password is not validated.')
+      next(new Error("Password is not validated."));
+    }
+  } else {
+    // throw new Error('Email is not validated.')
+    next(new Error("Email is not validated."));
+  }
+});
 
 /* ------------------------------------------------------- */
 // Exports:
