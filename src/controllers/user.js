@@ -5,6 +5,43 @@
 // User Controllers:
 
 const User = require("../models/user");
+const Token = require("../models/token");
+
+const passwordEncrypt = require("../helpers/passwordEncrypt");
+
+const jwt = require("jsonwebtoken");
+
+/* ------------------------------------------------------- */
+
+// data = req.body
+const checkUserEmailAndPassword = function (data) {
+  return data;
+
+  // Email Control:
+  const isEmailValidated = data.email
+    ? /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(data.email)
+    : true;
+
+  if (isEmailValidated) {
+    const isPasswordValidated = data.password
+      ? /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(
+          data.password
+        )
+      : true;
+
+    if (isPasswordValidated) {
+      data.password = passwordEncrypt(data.password);
+
+      return data;
+    } else {
+      throw new Error("Password is not validated.");
+    }
+  } else {
+    throw new Error("Email is not validated.");
+  }
+};
+
+/* ------------------------------------------------------- */
 
 module.exports = {
   list: async (req, res) => {
@@ -35,6 +72,9 @@ module.exports = {
     /*
             #swagger.tags = ["Users"]
             #swagger.summary = "Create User"
+            #swagger.description = `
+                Password Format Type: It must has min.1 lowercase, min.1 uppercase, min.1 number and min.1 specialChars.
+            `
             #swagger.parameters['body'] = {
                 in: 'body',
                 required: true,
@@ -48,10 +88,30 @@ module.exports = {
             }
         */
 
-    const data = await User.create(req.body);
+    // const data = await User.create(req.body)
+    const data = await User.create(checkUserEmailAndPassword(req.body));
+
+    /* AUTO LOGIN */
+    // SimpleToken:
+    const tokenData = await Token.create({
+      userId: data._id,
+      token: passwordEncrypt(data._id + Date.now()),
+    });
+    // JWT:
+    const accessToken = jwt.sign(data.toJSON(), process.env.ACCESS_KEY, {
+      expiresIn: "30m",
+    });
+    const refreshToken = jwt.sign(
+      { _id: data._id, password: data.password },
+      process.env.REFRESH_KEY,
+      { expiresIn: "3d" }
+    );
+    /* AUTO LOGIN */
 
     res.status(201).send({
       error: false,
+      token: tokenData.token,
+      bearer: { accessToken, refreshToken },
       data,
     });
   },
@@ -87,10 +147,12 @@ module.exports = {
             }
         */
 
-    // const data = await User.findByIdAndUpdate(req.params.id, req.body, { runValidators: true })
-    const data = await User.updateOne({ _id: req.params.id }, req.body, {
-      runValidators: true,
-    });
+    // const data = await User.updateOne({ _id: req.params.id }, req.body, { runValidators: true })
+    const data = await User.updateOne(
+      { _id: req.params.id },
+      checkUserEmailAndPassword(req.body),
+      { runValidators: true }
+    );
 
     res.status(202).send({
       error: false,
