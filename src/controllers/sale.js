@@ -5,6 +5,7 @@
 // Sale Controllers:
 
 const Sale = require("../models/sale");
+const Product = require("../models/product");
 
 module.exports = {
   list: async (req, res) => {
@@ -22,7 +23,11 @@ module.exports = {
             `
         */
 
-    const data = await res.getModelList(Sale);
+    const data = await res.getModelList(Sale, {}, [
+      "userId",
+      "brandId",
+      "productId",
+    ]);
 
     res.status(200).send({
       error: false,
@@ -44,6 +49,23 @@ module.exports = {
             }
         */
 
+    // Set userId from logined user:
+    req.body.userId = req.user._id;
+
+    //const data = await Sale.create(req.body);
+    const currentProduct = await Product.findOne({ _id: req.body.productId });
+    if (currentProduct.quantity > req.body.quantity) {
+      const data = await Sale.create(req.body);
+      const updateProduct = await Product.updateOne(
+        { _id: data.productId },
+        { $inc: { quantity: -data.quantity } }
+      );
+    } else {
+      return res.status(400).send({
+        error: true,
+        message: "Quantity is not enough.",
+      });
+    }
     const data = await Sale.create(req.body);
 
     res.status(201).send({
@@ -58,7 +80,11 @@ module.exports = {
             #swagger.summary = "Get Single Sale"
         */
 
-    const data = await Sale.findOne({ _id: req.params.id });
+    const data = await Sale.findOne({ _id: req.params.id }).populate([
+      "userId",
+      "brandId",
+      "productId",
+    ]);
 
     res.status(200).send({
       error: false,
