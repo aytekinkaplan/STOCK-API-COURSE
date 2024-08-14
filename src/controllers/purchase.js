@@ -5,6 +5,7 @@
 // Purchase Controllers:
 
 const Purchase = require("../models/purchase");
+const Product = require("../models/product");
 
 module.exports = {
   list: async (req, res) => {
@@ -22,7 +23,12 @@ module.exports = {
             `
         */
 
-    const data = await res.getModelList(Purchase);
+    const data = await res.getModelList(Purchase, {}, [
+      "userId",
+      "firmId",
+      "brandId",
+      "productId",
+    ]);
 
     res.status(200).send({
       error: false,
@@ -44,7 +50,16 @@ module.exports = {
             }
         */
 
+    // Set userId from logined user:
+    req.body.userId = req.user._id;
+
     const data = await Purchase.create(req.body);
+
+    // Satınalma sonrası ürün adetini arttır:
+    const updateProduct = await Product.updateOne(
+      { _id: data.productId },
+      { $inc: { quantity: +data.quantity } }
+    );
 
     res.status(201).send({
       error: false,
@@ -58,7 +73,12 @@ module.exports = {
             #swagger.summary = "Get Single Purchase"
         */
 
-    const data = await Purchase.findOne({ _id: req.params.id });
+    const data = await Purchase.findOne({ _id: req.params.id }).populate([
+      "userId",
+      "firmId",
+      "brandId",
+      "productId",
+    ]);
 
     res.status(200).send({
       error: false,
@@ -79,6 +99,18 @@ module.exports = {
             }
         */
 
+    if (req.body?.quantity) {
+      // Mevcut işlemdeki adet bilgisi al:
+      const currentPurchase = await Purchase.findOne({ _id: req.params.id });
+      // Farkı hesapla:
+      const difference = req.body.quantity - currentPurchase.quantity;
+      // Farkı Producta yansıt:
+      const updateProduct = await Product.updateOne(
+        { _id: currentPurchase.productId },
+        { $inc: { quantity: +difference } }
+      );
+    }
+    // Update:
     const data = await Purchase.updateOne({ _id: req.params.id }, req.body, {
       runValidators: true,
     });
@@ -96,7 +128,17 @@ module.exports = {
             #swagger.summary = "Delete Purchase"
         */
 
+    // Mevcut işlemdeki adet bilgisi al:
+    const currentPurchase = await Purchase.findOne({ _id: req.params.id });
+
+    // Delete:
     const data = await Purchase.deleteOne({ _id: req.params.id });
+
+    // Product quantity'den adeti eksilt:
+    const updateProduct = await Product.updateOne(
+      { _id: currentPurchase.productId },
+      { $inc: { quantity: -currentPurchase.quantity } }
+    );
 
     res.status(data.deletedCount ? 204 : 404).send({
       error: !data.deletedCount,
